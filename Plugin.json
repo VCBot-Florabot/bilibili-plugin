@@ -4,7 +4,7 @@
     "IsLibraries": false,
     "PluginIcon": null,
     "PluginAuthor": "luyanci",
-    "MainPyName": "main",
+    "MainPyName": "bilibili",
     "PluginDescription": "B站插件",
     "EnablePlugin": true
 }
