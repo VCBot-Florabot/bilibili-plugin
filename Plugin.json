@@ -1,6 +1,6 @@
 {
     "PluginName": "B站插件",
-    "DependentLibraries":null,
+    "DependentLibraries":["bilibili-api-python"],
     "IsLibraries": false,
     "PluginIcon": null,
     "PluginAuthor": "luyanci",
