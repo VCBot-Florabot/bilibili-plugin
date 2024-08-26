@@ -1,4 +1,5 @@
 import json
+from math import exp
 import yaml
 import os
 import datetime
@@ -21,7 +22,10 @@ from bilibili_api.exceptions import LoginError
 
 API=get_api("dynamic")
 flora_api = {}  # 顾名思义,FloraBot的API,载入(若插件已设为禁用则不载入)后会赋值上
-
+c=Credential()
+last_update = int(time())
+tmp_status={}
+tml_status_bak={}
 
     
 class bili_dynamic:
@@ -32,16 +36,30 @@ class bili_dynamic:
             failed=False
             try:
                 info=infos['items'][i]
+                print(info)
             except:
                 failed=True
             finally:
                 if failed:
                     break
                 else:
-                    
-                    continue
-        live_stat=Timer(5,bili_dynamic.get_liveing_users)        
-        live_stat.start()
+                    u_cfg={}
+                    tml_status_bak=tmp_status.copy()
+                    tmp_status[info['uid']]=True
+                    try:
+                        u_cfg=config[str(info['uid'])]['gid']
+                        print(u_cfg)
+                    except:
+                        continue
+                    finally:
+                        try:
+                            a=tml_status_bak[info['uid']]
+                        except:
+                            for g in u_cfg:
+                                send_msg(msg=f'{info["uname"]} 正在直播！',gid=g,uid=g)
+                        finally:
+                            continue
+
     def parse_dynamic(d: dict):
         info = d['modules']['module_author']
         dtype = d['type']
@@ -79,13 +97,17 @@ class bili_dynamic:
         }
     def fetch_bilibili_updates():
         global last_update
-        dynamic_event=Timer(5,bili_dynamic.fetch_bilibili_updates)
-        dynamic_event.setDaemon(False)
+
         logger.debug('test')
         #if len(config.items()) == 0:
         #    return
         #logger.debug('获取B站动态更新')
-        dyna = sync( custom_bili_API.get_dynamic_page_info(credential=c))
+        try:
+            dyna = sync( custom_bili_API.get_dynamic_page_info(credential=c))
+        except:
+            logger.error('获取B站动态更新失败')
+
+            return
         #logger.debug(f'更新到{len(dyna)}条动态')
         dyna_names = []
         dyna_times = []
@@ -120,7 +142,7 @@ class bili_dynamic:
                 json.dump({'last_update': t}, f)
             #logger.debug(f'刷新动态更新时间为{t}({last_update})')
         #logger.debug(f'成功刷新{len(dyna)}条动态：' + ', '.join(dyna_names))`
-        dynamic_event.start()
+        #dynamic_event.start()
         
 
 
@@ -133,6 +155,12 @@ class bili_dynamic:
             return u[:l] + '\n...点击链接查看全文'
         return u
 
+    def dynamics():
+        live_stat=Timer(5,bili_dynamic.dynamics)        
+        live_stat.start()
+        bili_dynamic.get_liveing_users()
+        
+        bili_dynamic.fetch_bilibili_updates()
 
 class configs:
     def init():
@@ -150,7 +178,7 @@ class configs:
 
 
 class custom_bili_API: 
-    async def get_dynamic_page_info(credential: Credential=Credential(),features: str ="itemOpusStyle",pn: int =1):
+    async def get_dynamic_page_info(credential: Credential,features: str ="itemOpusStyle",pn: int =1):
         api=API["info"]['dynamic_page_info']
         params ={
             "timezone_offset": -400,
@@ -201,6 +229,11 @@ send_msg = occupying_function
 def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载入)或启用插件时会调用一次,API可能没有那么快更新,可等待,无传入参数
     global send_msg
     global loaded
+    global live_stat
+    global dynamic_event
+    global tmp_save
+    tmp_save = f"./{flora_api.get('ThePluginPath')}/data/last_update.json"
+    global last_update
     loaded=False
     #print(flora_api)
     send_msg = flora_api.get("SendMsg")
@@ -219,15 +252,13 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
         print("未检测到cookie,请先登录!")
         login_failed=True
     finally:
-        if not login_failed:
-            global live_stat
-            live_stat=Timer(5,bili_dynamic.get_liveing_users)
+        if not login_failed and not loaded:
+            live_stat=Timer(5,bili_dynamic.dynamics)
             live_stat.setDaemon(False)
             live_stat.run()
+        else:
+            return
 
-    global tmp_save
-    tmp_save = f"./{flora_api.get('ThePluginPath')}/data/last_update.json"
-    global last_update
     try:
         with open(tmp_save, 'r') as f:
             last_update = json.load(f)['last_update']
@@ -236,14 +267,11 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
     except:
         logger.warning('未找到上次更新时间，使用当前时间')
         last_update = int(time())
-    finally:
-        global dynamic_event
-        dynamic_event=Timer(5,bili_dynamic.fetch_bilibili_updates)
-        dynamic_event.setDaemon(False)
-        dynamic_event.run()
+
 
 def api_update_event():  # 在API更新时会调用一次(若插件已设为禁用则不调用),可及时获得最新的API内容,无传入参数
     #print(flora_api)
+
     pass
 
 
@@ -258,6 +286,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
         print(uid, gid, mid, msg)
         if msg == "Btest":
             print(config.items())
+            print(config.values())
         if msg == "B登录":
             if uid not in flora_api.get('Administrator') and gid is None: # 判断是否为管理员且在私聊
                 return
@@ -290,19 +319,19 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
             except:
                 failed=True
                 config[message[1]]={
-                        "gid":[gid],
+                        "gid":[],
                         "atall":{
                             "dynamic": False,
                             "video": False,
                             "live": False
                         }
                     }
-                
+                u_cfg=config[message[1]]
             finally:
-                if not failed and gid not in u_cfg['gid']:
+                if not failed and not gid in u_cfg['gid']:
                     u_cfg['gid'].append(gid)
                 elif gid in u_cfg['gid']:
-                    send_msg(msg="已订阅此用户",uid=uid,gid=gid)
+                    send_msg(msg="已订阅过此用户",uid=uid,gid=gid)
                     return
             configs.update()
             send_msg(msg=f"已订阅{message[1]}",uid=uid,gid=gid)
@@ -325,9 +354,20 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                     send_msg(msg=f"已取消订阅{message[1]}",uid=uid,gid=gid)
                 else:
                     send_msg(msg="未订阅此用户",uid=uid,gid=gid)
+                    return
         if message[0] == "B全员" and gid is not None:
             u_cfg=[]
             failed=False
+            type=""
+            if message[2] == "动态" or "dynamic":
+                type="dynamic"
+            elif message[2] == "视频" or "video":
+                type="video"
+            elif message[2] == "直播" or "live":
+                type="live"
+            else:
+                send_msg(msg="请输入正确的类型",uid=uid,gid=gid)    
+                return
             try:
                 u_cfg=config[message[1]]
             except TypeError:
@@ -336,11 +376,15 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                 if failed or not gid in u_cfg['gid']:
                     send_msg(msg="未订阅此用户",uid=uid,gid=gid)
                     return
-            
+                elif gid in u_cfg['gid']:
+                    config[message[1]]['atall'][type]=True
+                    configs.update()
 def stop():
     # 插件停止函数,但是official版本没有这个特性.jpg
     live_stat.daemon=False
     dynamic_event.daemon=False
     live_stat.cancel()
     dynamic_event.cancel()
+    import sys
+    sys.exit()
 
