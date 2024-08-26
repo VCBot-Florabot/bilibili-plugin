@@ -8,7 +8,7 @@ from time import sleep,time
 from threading import Timer
 from typing import Tuple,Union
 from apscheduler import schedulers
-from loguru import logger
+#from loguru import logger
 #from ruamel import yaml
 
 from bilibili_api import Credential,login_func,login
@@ -26,11 +26,11 @@ c=Credential()
 last_update = int(time())
 tmp_status={}
 tml_status_bak={}
-
+at_message="\n[CQ:at,qq=all]"
     
 class bili_dynamic:
     def get_liveing_users(): #获取正在直播的up(从动态页面获取),wip
-        logger.info('test')
+        #logger.info('test')
         infos=sync(dynamic.get_live_users(credential=c))
         for i in range(0,9):
             failed=False
@@ -44,8 +44,10 @@ class bili_dynamic:
                     break
                 else:
                     u_cfg={}
-                    tml_status_bak=tmp_status.copy()
+                    tml_status_bak=json.load(open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='r',errors='ignore'))
                     tmp_status[info['uid']]=True
+                    with open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='w',errors='ignore')as f:
+                        f.write(json.dumps(tmp_status))
                     try:
                         u_cfg=config[str(info['uid'])]['gid']
                         print(u_cfg)
@@ -55,8 +57,9 @@ class bili_dynamic:
                         try:
                             a=tml_status_bak[info['uid']]
                         except:
+                            
                             for g in u_cfg:
-                                send_msg(msg=f'{info["uname"]} 正在直播！',gid=g,uid=g)
+                                send_msg(msg=f'{info["uname"]} 正在直播！\n{bili_dynamic.clean_url(info["link"])}',gid=g,uid=g)
                         finally:
                             continue
 
@@ -98,14 +101,14 @@ class bili_dynamic:
     def fetch_bilibili_updates():
         global last_update
 
-        logger.debug('test')
+        #logger.debug('test')
         #if len(config.items()) == 0:
         #    return
         #logger.debug('获取B站动态更新')
         try:
             dyna = sync( custom_bili_API.get_dynamic_page_info(credential=c))
         except:
-            logger.error('获取B站动态更新失败')
+            #logger.error('获取B站动态更新失败')
 
             return
         #logger.debug(f'更新到{len(dyna)}条动态')
@@ -117,10 +120,17 @@ class bili_dynamic:
             res = bili_dynamic.parse_dynamic(d)
             #logger.debug(res)
             dyna_names.append(res['name'])
+            failed=False
             #logger.debug(f'Time: {datetime.datetime.fromtimestamp(res["time"])}({res["time"]}) vs {last_update}')
-            if (key:=str(res['mid'])) in config.items() and res['time'] > last_update:
+            try:
+                dd=config[str(res['mid'])]
+            except KeyError:
+                failed=True
+                #logger.debug(f'{res["mid"]}未在配置文件中找到')
+            
+            if not failed  and res['time'] > last_update:
                 print('test')
-                
+                print(last_update)
                 dtype = res['mid']
                 print('test')
                 #if is_in_blacklist(key, dtype):
@@ -129,12 +139,12 @@ class bili_dynamic:
                     msg = f"{res['name']} {bili_dynamic.shorten(res['text'])}\n[CQ:image,file={res['image']}]\n{bili_dynamic.clean_url(res['url'])}"
                 else:
                     msg = f"{res['name']} {bili_dynamic.shorten(res['text'])}\n{bili_dynamic.clean_url(res['url'])}"
-                for gid in config[res['mid']]['gid']:
+                for gid in config[str(res['mid'])]['gid']:
                     #if is_in_blacklist(gid, dtype):
                     #   continue
                     #logger.info(f'将{key}的更新推送到{gid}\n{msg}')
                     #await MessageFactory(msg).send_to(TargetQQGroup(group_id=int(gid)))
-                    send_msg(msg=msg,gid=gid)
+                    send_msg(msg=msg,gid=gid,uid=gid)
             dyna_times.append(res["time"])
         if (t:= max(dyna_times)) != last_update: # 使用最后一条动态的时间
             last_update = t
@@ -240,6 +250,8 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
     #创建data文件夹
     if not os.path.exists(f"./{flora_api.get('ThePluginPath')}/data"):
         os.mkdir(f"./{flora_api.get('ThePluginPath')}/data")
+        with open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='w',errors='ignore') as f:
+            f.write('{}')
     print("FloraBot插件模板 加载成功")
     login_failed=False
     global config
@@ -265,7 +277,7 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
         dt = datetime.datetime.fromtimestamp(last_update)
         print(f'加载上次更新时间{dt}({last_update})')
     except:
-        logger.warning('未找到上次更新时间，使用当前时间')
+        #logger.warning('未找到上次更新时间，使用当前时间')
         last_update = int(time())
 
 
@@ -328,7 +340,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                     }
                 u_cfg=config[message[1]]
             finally:
-                if not failed and not gid in u_cfg['gid']:
+                if failed and not gid in u_cfg['gid']:
                     u_cfg['gid'].append(gid)
                 elif gid in u_cfg['gid']:
                     send_msg(msg="已订阅过此用户",uid=uid,gid=gid)
