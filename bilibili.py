@@ -36,7 +36,7 @@ class bili_dynamic:
             failed=False
             try:
                 info=infos['items'][i]
-                print(info)
+                #print(info)
             except:
                 failed=True
             finally:
@@ -57,9 +57,11 @@ class bili_dynamic:
                         try:
                             a=tml_status_bak[info['uid']]
                         except:
-                            
+                            msg=f'{info["uname"]} 正在直播！\n{bili_dynamic.clean_url(info["link"])}'
+                            if config[str(info['uid'])]['atall']['live'] is True:
+                                msg+=at_message
                             for g in u_cfg:
-                                send_msg(msg=f'{info["uname"]} 正在直播！\n{bili_dynamic.clean_url(info["link"])}',gid=g,uid=g)
+                                send_compatible(msg=msg,gid=g,uid=g)
                         finally:
                             continue
 
@@ -128,7 +130,7 @@ class bili_dynamic:
                 failed=True
                 #logger.debug(f'{res["mid"]}未在配置文件中找到')
             
-            if not failed  and res['time'] > last_update:
+            if not failed and res['time'] > last_update : #
                 print('test')
                 print(last_update)
                 dtype = res['mid']
@@ -137,14 +139,18 @@ class bili_dynamic:
                 #    continue
                 if res['type'] == "DYNAMIC_TYPE_AV":
                     msg = f"{res['name']} {bili_dynamic.shorten(res['text'])}\n[CQ:image,file={res['image']}]\n{bili_dynamic.clean_url(res['url'])}"
+                    if config[str(res['mid'])]['atall']['video'] is True:
+                        msg+=at_message
                 else:
                     msg = f"{res['name']} {bili_dynamic.shorten(res['text'])}\n{bili_dynamic.clean_url(res['url'])}"
+                    if config[str(res['mid'])]['atall']['dynamic'] is True:
+                        msg+=at_message
                 for gid in config[str(res['mid'])]['gid']:
                     #if is_in_blacklist(gid, dtype):
                     #   continue
                     #logger.info(f'将{key}的更新推送到{gid}\n{msg}')
                     #await MessageFactory(msg).send_to(TargetQQGroup(group_id=int(gid)))
-                    send_msg(msg=msg,gid=gid,uid=gid)
+                    send_compatible(msg=msg,gid=gid,uid=gid)
             dyna_times.append(res["time"])
         if (t:= max(dyna_times)) != last_update: # 使用最后一条动态的时间
             last_update = t
@@ -241,6 +247,7 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
     global loaded
     global live_stat
     global dynamic_event
+
     global tmp_save
     tmp_save = f"./{flora_api.get('ThePluginPath')}/data/last_update.json"
     global last_update
@@ -289,10 +296,21 @@ def api_update_event():  # 在API更新时会调用一次(若插件已设为禁�
 
 def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用这个函数(若插件已设为禁用则不调用),传入原消息JSON参数
     print(data)
+
     uid = data.get("user_id")  # 事件对象QQ号
     gid = data.get("group_id")  # 事件对象群号
     mid = data.get("message_id")  # 消息ID
     msg = data.get("raw_message")  # 消息内容
+    try:
+        global ws_client
+        global ws_server
+        send_address = data.get("SendAddress")
+        ws_client = send_address.get("WebSocketClient")
+        ws_server = send_address.get("WebSocketServer")
+    except:
+        ws_server=None
+        ws_client = None
+        pass
     if msg is not None:
         msg = msg.replace("&#91;", "[").replace("&#93;", "]").replace("&amp;", "&").replace("&#44;", ",")  # 消息需要将URL编码替换到正确内容
         print(uid, gid, mid, msg)
@@ -300,11 +318,11 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
             print(config.items())
             print(config.values())
         if msg == "B登录":
-            if uid not in flora_api.get('Administrator') and gid is None: # 判断是否为管理员且在私聊
+            if uid not in flora_api.get('Administrator') and gid is None: # 判断是否为Bot管理员且在私聊
                 return
             log_data=login_func.get_qrcode() #Tuple[Picture,key]
             token=log_data[1]
-            send_msg(msg=f"请扫描二维码登录\n[CQ:image,file={log_data[0].url}]",uid=uid,gid=gid)
+            send_compatible(msg=f"请扫描二维码登录\n[CQ:image,file={log_data[0].url}]",uid=uid,gid=gid)
             while True:
                 sleep(1)
                 result=custom_bili_API.check_qrcode_events(token)
@@ -313,7 +331,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                     print(cookies)
                     with open(file=f"./{flora_api.get('ThePluginPath')}/data/cookie.json",mode="w",encoding="utf-8",errors="ignore") as cookies_file:
                         cookies_file.write(json.dumps(cookies.get_cookies(),ensure_ascii=False))
-                    send_msg(msg="登录成功",uid=uid,gid=gid)
+                    send_compatible(msg="登录成功",uid=uid,gid=gid)
                     restart=flora_api.get("LoadPlugins")
                     restart()
                     break
@@ -343,10 +361,10 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                 if failed and not gid in u_cfg['gid']:
                     u_cfg['gid'].append(gid)
                 elif gid in u_cfg['gid']:
-                    send_msg(msg="已订阅过此用户",uid=uid,gid=gid)
+                    send_compatible(msg="已订阅过此用户",uid=uid,gid=gid)
                     return
             configs.update()
-            send_msg(msg=f"已订阅{message[1]}",uid=uid,gid=gid)
+            send_compatible(msg=f"已订阅{message[1]}",uid=uid,gid=gid)
             return
         if message[0] == "B取消订阅" and gid is not None:
             u_cfg=[]
@@ -357,15 +375,15 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                 failed=True
             finally:
                 if failed or not gid in u_cfg['gid']:
-                    send_msg(msg="未订阅此用户",uid=uid,gid=gid)
+                    send_compatible(msg="未订阅此用户",uid=uid,gid=gid)
                     return
             if not failed:
                 if gid in u_cfg['gid']:
                     config[message[1]]['gid'].remove(gid)
                     configs.update()
-                    send_msg(msg=f"已取消订阅{message[1]}",uid=uid,gid=gid)
+                    send_compatible(msg=f"已取消订阅{message[1]}",uid=uid,gid=gid)
                 else:
-                    send_msg(msg="未订阅此用户",uid=uid,gid=gid)
+                    send_compatible(msg="未订阅此用户",uid=uid,gid=gid)
                     return
         if message[0] == "B全员" and gid is not None:
             u_cfg=[]
@@ -378,7 +396,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
             elif message[2] == "直播" or "live":
                 type="live"
             else:
-                send_msg(msg="请输入正确的类型",uid=uid,gid=gid)    
+                send_compatible(msg="请输入正确的类型",uid=uid,gid=gid)    
                 return
             try:
                 u_cfg=config[message[1]]
@@ -386,7 +404,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                 failed=True
             finally:
                 if failed or not gid in u_cfg['gid']:
-                    send_msg(msg="未订阅此用户",uid=uid,gid=gid)
+                    send_compatible(msg="未订阅此用户",uid=uid,gid=gid)
                     return
                 elif gid in u_cfg['gid']:
                     config[message[1]]['atall'][type]=True
@@ -400,3 +418,11 @@ def stop():
     import sys
     sys.exit()
 
+def send_compatible(msg:str,gid:str|int,uid: str|int,data: dict=None):  #兼容性函数,用于兼容旧版本API
+    if flora_api.get("FloraVersion") == 'v1.01':
+        send_msg(msg=msg,gid=gid,uid=uid)
+    else:
+        send_type=flora_api.get("ConnectionType")
+        send_address=flora_api.get("FrameworkAddress")
+        send_msg(msg=msg,gid=gid,uid=uid,send_type=send_type,ws_client=ws_client,ws_server=ws_server)
+        
