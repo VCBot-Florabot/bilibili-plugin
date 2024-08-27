@@ -6,7 +6,7 @@ import datetime
 
 from time import sleep,time
 from threading import Timer
-from typing import Tuple,Union
+from typing import Tuple, Type,Union
 from apscheduler import schedulers
 #from loguru import logger
 #from ruamel import yaml
@@ -25,7 +25,6 @@ flora_api = {}  # 顾名思义,FloraBot的API,载入(若插件已设为禁用则
 c=Credential()
 last_update = int(time())
 tmp_status={}
-tml_status_bak={}
 at_message="\n[CQ:at,qq=all]"
     
 class bili_dynamic:
@@ -45,6 +44,7 @@ class bili_dynamic:
                 else:
                     u_cfg={}
                     tml_status_bak=json.load(open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='r',errors='ignore'))
+                    print(tml_status_bak)
                     tmp_status[info['uid']]=True
                     with open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='w',errors='ignore')as f:
                         f.write(json.dumps(tmp_status))
@@ -55,8 +55,10 @@ class bili_dynamic:
                         continue
                     finally:
                         try:
-                            a=tml_status_bak[info['uid']]
+                            a=tml_status_bak[str(info['uid'])]
+                            print(a)
                         except:
+                            
                             msg=f'{info["uname"]} 正在直播！\n{bili_dynamic.clean_url(info["link"])}'
                             if config[str(info['uid'])]['atall']['live'] is True:
                                 msg+=at_message
@@ -120,6 +122,9 @@ class bili_dynamic:
             #logger.debug(f'处理第{i + 1}条动态')
             #logger.debug(d)
             res = bili_dynamic.parse_dynamic(d)
+            #屏蔽标题带‘直播回放‘
+            if res['text'].find('直播回放')!=-1:
+                continue
             #logger.debug(res)
             dyna_names.append(res['name'])
             failed=False
@@ -388,16 +393,24 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
         if message[0] == "B全员" and gid is not None:
             u_cfg=[]
             failed=False
-            type=""
-            if message[2] == "动态" or "dynamic":
-                type="dynamic"
-            elif message[2] == "视频" or "video":
-                type="video"
-            elif message[2] == "直播" or "live":
-                type="live"
-            else:
-                send_compatible(msg="请输入正确的类型",uid=uid,gid=gid)    
+            try:
+                types=str(message[2])
+            except:
+                failed=True
+                send_compatible(msg="请输入类型",uid=uid,gid=gid)    
+            finally:
+                if failed:
+                    return
+            type_t=["动态","视频","直播"]
+            type=["dynamic","video","live"]
+            if types not in type and types not in type_t:
+                send_compatible(msg="请输入正确的类型",uid=uid,gid=gid)
                 return
+            else:
+                if types in type_t:
+                    types=type[type_t.index(types)]
+
+
             try:
                 u_cfg=config[message[1]]
             except TypeError:
@@ -407,7 +420,13 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                     send_compatible(msg="未订阅此用户",uid=uid,gid=gid)
                     return
                 elif gid in u_cfg['gid']:
-                    config[message[1]]['atall'][type]=True
+                    cfg=config[message[1]]['atall'][types]
+                    if cfg:
+                        config[message[1]]['atall'][types]=False
+                        send_compatible(msg=f"取消了{message[1]}的{types}全员通知",uid=uid,gid=gid)
+                    else:
+                        config[message[1]]['atall'][types]=True
+                        send_compatible(msg=f"开启了{message[1]}的{types}全员通知",uid=uid,gid=gid)
                     configs.update()
 def stop():
     # 插件停止函数,但是official版本没有这个特性.jpg
