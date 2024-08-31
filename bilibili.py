@@ -1,13 +1,12 @@
 import json
-from math import exp
 import yaml
 import os
 import datetime
 
 from time import sleep,time
 from threading import Timer
-from typing import Tuple, Type,Union
-from apscheduler import schedulers
+from typing import Tuple,Union
+from apscheduler.schedulers.blocking import BlockingScheduler
 #from loguru import logger
 #from ruamel import yaml
 
@@ -23,6 +22,7 @@ from bilibili_api.exceptions import LoginError
 API=get_api("dynamic")
 flora_api = {}  # 顾名思义,FloraBot的API,载入(若插件已设为禁用则不载入)后会赋值上
 c=Credential()
+sche=BlockingScheduler()
 last_update = int(time())
 tmp_status={}
 at_message="\n[CQ:at,qq=all]"
@@ -44,7 +44,7 @@ class bili_dynamic:
                 else:
                     u_cfg={}
                     tml_status_bak=json.load(open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='r',errors='ignore'))
-                    print(tml_status_bak)
+                    #print(tml_status_bak)
                     tmp_status[info['uid']]=True
                     with open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='w',errors='ignore')as f:
                         f.write(json.dumps(tmp_status))
@@ -177,8 +177,7 @@ class bili_dynamic:
         return u
 
     def dynamics():
-        live_stat=Timer(5,bili_dynamic.dynamics)        
-        live_stat.start()
+
         bili_dynamic.get_liveing_users()
         
         bili_dynamic.fetch_bilibili_updates()
@@ -277,9 +276,8 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
         login_failed=True
     finally:
         if not login_failed and not loaded:
-            live_stat=Timer(5,bili_dynamic.dynamics)
-            live_stat.setDaemon(False)
-            live_stat.run()
+            sche.add_job(bili_dynamic.dynamics, 'interval', seconds=5)
+            sche.start()
         else:
             return
 
