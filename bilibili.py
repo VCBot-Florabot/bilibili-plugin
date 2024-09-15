@@ -4,7 +4,7 @@ import os
 import datetime
 
 from time import sleep,time
-from threading import Timer
+#from threading import Timer
 from typing import Tuple,Union
 from apscheduler.schedulers.blocking import BlockingScheduler
 #from loguru import logger
@@ -50,13 +50,13 @@ class bili_dynamic:
                         f.write(json.dumps(tmp_status))
                     try:
                         u_cfg=config[str(info['uid'])]['gid']
-                        print(u_cfg)
+                        #print(u_cfg)
                     except:
                         continue
                     finally:
                         try:
                             a=tml_status_bak[str(info['uid'])]
-                            print(a)
+                            #print(a)
                         except:
                             
                             msg=f'{info["uname"]} 正在直播！\n{bili_dynamic.clean_url(info["link"])}'
@@ -177,10 +177,11 @@ class bili_dynamic:
         return u
 
     def dynamics():
-
-        bili_dynamic.get_liveing_users()
-        
-        bili_dynamic.fetch_bilibili_updates()
+        try:
+            bili_dynamic.get_liveing_users()
+            bili_dynamic.fetch_bilibili_updates()
+        except:
+            pass
 
 class configs:
     def init():
@@ -263,7 +264,7 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
         os.mkdir(f"./{flora_api.get('ThePluginPath')}/data")
         with open(f'./{flora_api.get("ThePluginPath")}/data/bkstatus.json',mode='w',errors='ignore') as f:
             f.write('{}')
-    print("FloraBot插件模板 加载成功")
+    print("Bilibili-plugin 加载成功")
     login_failed=False
     global config
     config=configs.init()
@@ -276,7 +277,7 @@ def init():  # 插件初始化函数,在载入(若插件已设为禁用则不载
         login_failed=True
     finally:
         if not login_failed and not loaded:
-            sche.add_job(bili_dynamic.dynamics, 'interval', seconds=5)
+            sche.add_job(bili_dynamic.dynamics, 'interval', seconds=10)
             sche.start()
         else:
             return
@@ -426,14 +427,7 @@ def event(data: dict):  # 事件函数,FloraBot每收到一个事件都会调用
                         config[message[1]]['atall'][types]=True
                         send_compatible(msg=f"开启了{message[1]}的{types}全员通知",uid=uid,gid=gid)
                     configs.update()
-def stop():
-    # 插件停止函数,但是official版本没有这个特性.jpg
-    live_stat.daemon=False
-    dynamic_event.daemon=False
-    live_stat.cancel()
-    dynamic_event.cancel()
-    import sys
-    sys.exit()
+
 
 def send_compatible(msg:str,gid:str|int,uid: str|int,data: dict=None):  #兼容性函数,用于兼容旧版本API
     if flora_api.get("FloraVersion") == 'v1.01':
