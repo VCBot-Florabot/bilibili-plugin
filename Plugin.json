@@ -1,7 +1,8 @@
 {
     "PluginName": "B站插件",
     "DependentLibraries": [
-        "bilibili-api-python"
+        "bilibili-api-python",
+        "aiohttp"
     ],
     "IsLibraries": false,
     "PluginIcon": null,
